@@ -685,11 +685,20 @@ export function compileScript(
           }
         }
 
+        const { type, required } = props[key]
         if (!isProd) {
-          const { type, required } = props[key]
           return `${key}: { type: ${toRuntimeTypeString(
             type
           )}, required: ${required}${
+            defaultString ? `, ${defaultString}` : ``
+          } }`
+        } else if (
+          type.some(
+            el => el === 'Boolean' || (defaultString && el === 'Function')
+          )
+        ) {
+          // #4783 production: if boolean or defaultString and function exists, should keep the type.
+          return `${key}: { type: ${toRuntimeTypeString(type)}${
             defaultString ? `, ${defaultString}` : ``
           } }`
         } else {
@@ -1367,7 +1376,7 @@ export function compileScript(
   // <script setup> components are closed by default. If the user did not
   // explicitly call `defineExpose`, call expose() with no args.
   const exposeCall =
-    hasDefineExposeCall || options.inlineTemplate ? `` : `  expose()\n`
+    hasDefineExposeCall || options.inlineTemplate ? `` : `  expose();\n`
   if (isTS) {
     // for TS, make sure the exported type is still valid type with
     // correct props information
@@ -1621,15 +1630,10 @@ function extractRuntimeProps(
       m.key.type === 'Identifier'
     ) {
       let type
-      if (!isProd) {
-        if (m.type === 'TSMethodSignature') {
-          type = ['Function']
-        } else if (m.typeAnnotation) {
-          type = inferRuntimeType(
-            m.typeAnnotation.typeAnnotation,
-            declaredTypes
-          )
-        }
+      if (m.type === 'TSMethodSignature') {
+        type = ['Function']
+      } else if (m.typeAnnotation) {
+        type = inferRuntimeType(m.typeAnnotation.typeAnnotation, declaredTypes)
       }
       props[m.key.name] = {
         key: m.key.name,
