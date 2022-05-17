@@ -34,7 +34,8 @@ import {
   OptionTypesKeys,
   resolveMergedOptions,
   shouldCacheAccess,
-  MergedComponentOptionsOverride
+  MergedComponentOptionsOverride,
+  ComponentProvideOptions
 } from './componentOptions'
 import { EmitsOptions, EmitFn } from './componentEmits'
 import { Slots } from './componentSlots'
@@ -150,7 +151,8 @@ export type CreateComponentPublicInstance<
   PublicM extends MethodOptions = UnwrapMixinsType<PublicMixin, 'M'> &
     EnsureNonVoid<M>,
   PublicDefaults = UnwrapMixinsType<PublicMixin, 'Defaults'> &
-    EnsureNonVoid<Defaults>
+    EnsureNonVoid<Defaults>,
+  Provide extends ComponentProvideOptions = ComponentProvideOptions
 > = ComponentPublicInstance<
   PublicP,
   PublicB,
@@ -161,7 +163,19 @@ export type CreateComponentPublicInstance<
   PublicProps,
   PublicDefaults,
   MakeDefaultsOptional,
-  ComponentOptionsBase<P, B, D, C, M, Mixin, Extends, E, string, Defaults>
+  ComponentOptionsBase<
+    P,
+    B,
+    D,
+    C,
+    M,
+    Mixin,
+    Extends,
+    E,
+    string,
+    Defaults,
+    Provide
+  >
 >
 
 // public properties exposed on the proxy, which is used as the render context
@@ -238,8 +252,8 @@ export const publicPropertiesMap: PublicPropertiesMap =
     $root: i => getPublicInstance(i.root),
     $emit: i => i.emit,
     $options: i => (__FEATURE_OPTIONS_API__ ? resolveMergedOptions(i) : i.type),
-    $forceUpdate: i => () => queueJob(i.update),
-    $nextTick: i => nextTick.bind(i.proxy!),
+    $forceUpdate: i => i.f || (i.f = () => queueJob(i.update)),
+    $nextTick: i => i.n || (i.n = nextTick.bind(i.proxy!)),
     $watch: i => (__FEATURE_OPTIONS_API__ ? instanceWatch.bind(i) : NOOP)
   } as PublicPropertiesMap)
 
@@ -259,6 +273,8 @@ export interface ComponentRenderContext {
   [key: string]: any
   _: ComponentInternalInstance
 }
+
+export const isReservedPrefix = (key: string) => key === '_' || key === '$'
 
 export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
   get({ _: instance }: ComponentRenderContext, key: string) {
@@ -371,11 +387,7 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
         // to infinite warning loop
         key.indexOf('__v') !== 0)
     ) {
-      if (
-        data !== EMPTY_OBJ &&
-        (key[0] === '$' || key[0] === '_') &&
-        hasOwn(data, key)
-      ) {
+      if (data !== EMPTY_OBJ && isReservedPrefix(key[0]) && hasOwn(data, key)) {
         warn(
           `Property ${JSON.stringify(
             key
@@ -458,7 +470,7 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
   ) {
     if (descriptor.get != null) {
       // invalidate key cache of a getter based property #5417
-      target.$.accessCache[key] = 0
+      target._.accessCache![key] = 0
     } else if (hasOwn(descriptor, 'value')) {
       this.set!(target, key, descriptor.value, null)
     }
@@ -557,7 +569,7 @@ export function exposeSetupStateOnRenderContext(
   const { ctx, setupState } = instance
   Object.keys(toRaw(setupState)).forEach(key => {
     if (!setupState.__isScriptSetup) {
-      if (key[0] === '$' || key[0] === '_') {
+      if (isReservedPrefix(key[0])) {
         warn(
           `setup() return property ${JSON.stringify(
             key

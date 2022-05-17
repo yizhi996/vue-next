@@ -58,7 +58,8 @@ import { EmitsOptions, EmitsToProps } from './componentEmits'
 import { Directive } from './directives'
 import {
   CreateComponentPublicInstance,
-  ComponentPublicInstance
+  ComponentPublicInstance,
+  isReservedPrefix
 } from './componentPublicInstance'
 import { warn } from './warning'
 import { VNodeChild } from './vnode'
@@ -117,8 +118,9 @@ export interface ComponentOptionsBase<
   Extends extends ComponentOptionsMixin,
   E extends EmitsOptions,
   EE extends string = string,
-  Defaults = {}
-> extends LegacyOptions<Props, D, C, M, Mixin, Extends>,
+  Defaults = {},
+  Provide extends ComponentProvideOptions = ComponentProvideOptions
+> extends LegacyOptions<Props, D, C, M, Mixin, Extends, Provide>,
     ComponentInternalOptions,
     ComponentCustomOptions {
   setup?: (
@@ -224,6 +226,7 @@ export type ComponentOptionsWithoutProps<
   Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
   E extends EmitsOptions = EmitsOptions,
   EE extends string = string,
+  Provide extends ComponentProvideOptions = ComponentProvideOptions,
   PE = Props & EmitsToProps<E>
 > = ComponentOptionsBase<
   PE,
@@ -235,7 +238,8 @@ export type ComponentOptionsWithoutProps<
   Extends,
   E,
   EE,
-  {}
+  {},
+  Provide
 > & {
   props?: undefined
 } & ThisType<
@@ -252,6 +256,7 @@ export type ComponentOptionsWithArrayProps<
   Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
   E extends EmitsOptions = EmitsOptions,
   EE extends string = string,
+  Provide extends ComponentProvideOptions = ComponentProvideOptions,
   Props = Readonly<{ [key in PropNames]?: any }> & EmitsToProps<E>
 > = ComponentOptionsBase<
   Props,
@@ -263,7 +268,8 @@ export type ComponentOptionsWithArrayProps<
   Extends,
   E,
   EE,
-  {}
+  {},
+  Provide
 > & {
   props: PropNames[]
 } & ThisType<
@@ -289,6 +295,7 @@ export type ComponentOptionsWithObjectProps<
   Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
   E extends EmitsOptions = EmitsOptions,
   EE extends string = string,
+  Provide extends ComponentProvideOptions = ComponentProvideOptions,
   Props = Readonly<ExtractPropTypes<PropsOptions>> & EmitsToProps<E>,
   Defaults = ExtractDefaultPropTypes<PropsOptions>
 > = ComponentOptionsBase<
@@ -301,7 +308,8 @@ export type ComponentOptionsWithObjectProps<
   Extends,
   E,
   EE,
-  Defaults
+  Defaults,
+  Provide
 > & {
   props: PropsOptions & ThisType<void>
 } & ThisType<
@@ -384,6 +392,10 @@ type ComponentWatchOptionItem = WatchOptionItem | WatchOptionItem[]
 
 type ComponentWatchOptions = Record<string, ComponentWatchOptionItem>
 
+export type ComponentProvideOptions = ObjectProvideOptions | Function
+
+type ObjectProvideOptions = Record<string | symbol, unknown>
+
 type ComponentInjectOptions = string[] | ObjectInjectOptions
 
 type ObjectInjectOptions = Record<
@@ -397,7 +409,8 @@ interface LegacyOptions<
   C extends ComputedOptions,
   M extends MethodOptions,
   Mixin extends ComponentOptionsMixin,
-  Extends extends ComponentOptionsMixin
+  Extends extends ComponentOptionsMixin,
+  Provide extends ComponentProvideOptions = ComponentProvideOptions
 > {
   compatConfig?: CompatConfig
 
@@ -431,7 +444,7 @@ interface LegacyOptions<
   computed?: C
   methods?: M
   watch?: ComponentWatchOptions
-  provide?: Data | Function
+  provide?: Provide
   inject?: ComponentInjectOptions
 
   // assets
@@ -471,8 +484,8 @@ interface LegacyOptions<
    *
    * type-only, used to assist Mixin's type inference,
    * typescript will try to simplify the inferred `Mixin` type,
-   * with the `__differenciator`, typescript won't be able to combine different mixins,
-   * because the `__differenciator` will be different
+   * with the `__differentiator`, typescript won't be able to combine different mixins,
+   * because the `__differentiator` will be different
    */
   __differentiator?: keyof D | keyof C | keyof M
 }
@@ -669,7 +682,7 @@ export function applyOptions(instance: ComponentInternalInstance) {
         for (const key in data) {
           checkDuplicateProperties!(OptionTypes.DATA, key)
           // expose data on ctx during dev
-          if (key[0] !== '$' && key[0] !== '_') {
+          if (!isReservedPrefix(key[0])) {
             Object.defineProperty(ctx, key, {
               configurable: true,
               enumerable: true,

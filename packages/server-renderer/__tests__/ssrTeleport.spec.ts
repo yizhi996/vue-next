@@ -4,6 +4,7 @@
 
 import { createApp, h, Teleport } from 'vue'
 import { renderToString } from '../src/renderToString'
+import { renderToSimpleStream } from '../src/renderToStream'
 import { SSRContext } from '../src/render'
 import { ssrRenderTeleport } from '../src/helpers/ssrRenderTeleport'
 
@@ -116,5 +117,55 @@ describe('ssrRenderTeleport', () => {
     expect(ctx.teleports!['#target']).toBe(
       '<span>hello</span><!---->world<!---->'
     )
+  })
+
+  test('teleport inside async component', async () => {
+    const ctx: SSRContext = {}
+    const asyncComponent = {
+      template: '<teleport to="#target"><div>content</div></teleport>',
+      async setup() {}
+    }
+    const html = await renderToString(
+      h({
+        template: '<async-component />',
+        components: { asyncComponent }
+      }),
+      ctx
+    )
+    expect(html).toBe('<!--teleport start--><!--teleport end-->')
+    expect(ctx.teleports!['#target']).toBe(`<div>content</div><!---->`)
+  })
+
+  test('teleport inside async component (stream)', async () => {
+    const ctx: SSRContext = {}
+    const asyncComponent = {
+      template: '<teleport to="#target"><div>content</div></teleport>',
+      async setup() {}
+    }
+    let html = ''
+    let resolve: any
+    const p = new Promise(r => (resolve = r))
+    renderToSimpleStream(
+      h({
+        template: '<async-component />',
+        components: { asyncComponent }
+      }),
+      ctx,
+      {
+        push(chunk) {
+          if (chunk === null) {
+            resolve()
+          } else {
+            html += chunk
+          }
+        },
+        destroy(err) {
+          throw err
+        }
+      }
+    )
+    await p
+    expect(html).toBe('<!--teleport start--><!--teleport end-->')
+    expect(ctx.teleports!['#target']).toBe(`<div>content</div><!---->`)
   })
 })

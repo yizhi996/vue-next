@@ -89,6 +89,8 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
         node,
         context,
         node.props,
+        false /* isComponent */,
+        false /* isDynamicComponent */,
         true /* ssr */
       )
       if (props || directives.length) {
@@ -194,7 +196,7 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
           if (!needMergeProps) {
             node.children = [createInterpolation(prop.exp, prop.loc)]
           }
-        } else if (!needMergeProps) {
+        } else if (!needMergeProps && prop.name !== 'on') {
           // Directive transforms.
           const directiveTransform = context.directiveTransforms[prop.name]
           if (directiveTransform) {
