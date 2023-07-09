@@ -338,6 +338,8 @@ function baseCreateRenderer(
     insert: hostInsert,
     remove: hostRemove,
     patchProp: hostPatchProp,
+    /** @ts-ignore */
+    forcePatchProp: hostForcePatchProp,
     createElement: hostCreateElement,
     createText: hostCreateText,
     createComment: hostCreateComment,
@@ -908,7 +910,7 @@ function baseCreateRenderer(
             const prev = oldProps[key]
             const next = newProps[key]
             // #1471 force patch value
-            if (next !== prev || key === 'value') {
+            if (next !== prev || key === 'value' || hostForcePatchProp(el, key)) {
               hostPatchProp(
                 el,
                 key,
